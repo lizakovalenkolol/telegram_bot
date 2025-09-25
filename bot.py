@@ -3,6 +3,10 @@ import random
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
+# Фиктивный порт для Render (не используется самим ботом)
+PORT = int(os.environ.get("PORT", 5000))
+print(f"Running on dummy port {PORT}")
+
 # Список поддерживающих сообщений
 messages = [
     "Ты делаешь достаточно",
@@ -56,7 +60,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), keyword_response))
 
     # JobQueue для часовых уведомлений
-    app.job_queue.run_repeating(hourly_notification, interval=3600, first=10)
+    app.job_queue.run_repeating(hourly_notification, interval=3600, first=10)  # первый раз через 10 сек
 
     # Запуск бота без asyncio.run() — идеально для Render
     app.run_polling()
