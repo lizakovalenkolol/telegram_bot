@@ -1,59 +1,39 @@
 import os
-import random
 import asyncio
-from dotenv import load_dotenv
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes
 
-load_dotenv()
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-if not TOKEN:
-    raise SystemExit("TELEGRAM_TOKEN not set in .env!")
+# Множество для хранения пользователей
+subscribers = set()
 
-SUPPORT_MESSAGES = [
-    "Ты справляешься лучше, чем думаешь.",
-    "Я рядом — если нужно, напиши.",
-    "Позволь себе паузу. Ты делаешь достаточно.",
-    "Ошибки — это часть пути. У тебя получится.",
-    "Маленькие победы — тоже победы.",
-]
-
+# Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    chats = context.application.bot_data.setdefault("chats", set())
-    chats.add(chat_id)
-    await update.message.reply_text(
-        "Привет! Я бот поддержки.\n\n"
-        "/support — получить поддержляющее сообщение прямо сейчас\n\n"
-        "Теперь я буду присылать поддерживающее сообщение каждый час."
-    )
+    chat_id = update.message.chat_id
+    subscribers.add(chat_id)  # сохраняем пользователя для уведомлений
+    await update.message.reply_text("Привет! Я бот поддержки! 💛 Ты будешь получать поддерживающие сообщения!")
 
-async def support(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(random.choice(SUPPORT_MESSAGES))
-
-async def keyword_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.lower()
-    keywords = ["плохо", "тяжело", "не могу", "устал", "один", "одинка", "депресс", "хочется"]
-    if any(k in text for k in keywords):
-        await update.message.reply_text(random.choice(SUPPORT_MESSAGES))
-
+# Функция часового уведомления
 async def hourly_notification(context: ContextTypes.DEFAULT_TYPE):
-    chats = context.application.bot_data.get("chats", set())
-    for chat_id in chats:
-        await context.bot.send_message(chat_id=chat_id, text=random.choice(SUPPORT_MESSAGES))
+    for chat_id in subscribers:
+        try:
+            await context.bot.send_message(chat_id=chat_id, text="💛 Твоё поддерживающее сообщение!")
+        except Exception as e:
+            print(f"Не удалось отправить сообщение {chat_id}: {e}")
 
 async def main():
-    app = Application.builder().token(TOKEN).build()
+    token = os.environ.get("TELEGRAM_TOKEN")
+    if not token:
+        raise ValueError("TELEGRAM_TOKEN не задан!")
 
-    # Handlers
+    app = Application.builder().token(token).build()
+
+    # Команды
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("support", support))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, keyword_listener))
 
-    # JobQueue
-    app.job_queue.run_repeating(hourly_notification, interval=3600, first=3600)
+    # JobQueue для часовых уведомлений
+    app.job_queue.run_repeating(hourly_notification, interval=3600, first=10)  # первый раз через 10 сек для теста
 
-    print("Bot started. Press Ctrl+C to stop.")
+    # Запуск бота
     await app.run_polling()
 
 if __name__ == "__main__":
