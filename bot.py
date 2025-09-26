@@ -7,7 +7,6 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 # Загружаем токен
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-
 if not TOKEN:
     raise ValueError("TELEGRAM_TOKEN не задан!")
 
@@ -23,7 +22,7 @@ SUPPORT_MESSAGES = [
     "Маленькие победы тоже важны"
 ]
 
-# Функция отправки поддержки
+# Отправка поддержки
 async def send_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = random.choice(SUPPORT_MESSAGES)
     if update.message:
@@ -32,13 +31,13 @@ async def send_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.callback_query.answer()
         await update.callback_query.message.reply_text(message)
 
-# Ежечасная рассылка через JobQueue
+# Ежечасная рассылка
 async def hourly_support(context: ContextTypes.DEFAULT_TYPE):
     chat_ids = context.bot_data.get("chat_ids", set())
     for chat_id in chat_ids:
         await context.bot.send_message(chat_id, random.choice(SUPPORT_MESSAGES))
 
-# /start
+# Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     chat_ids = context.bot_data.get("chat_ids", set())
@@ -66,11 +65,12 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button, pattern="support_now"))
 
-    # JobQueue
+    # JobQueue для ежечасной рассылки
     app.job_queue.run_repeating(hourly_support, interval=3600, first=3600)
 
-    # Запуск
+    # Запуск бота
     app.run_polling()
 
 if __name__ == "__main__":
     main()
+
