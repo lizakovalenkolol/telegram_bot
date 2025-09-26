@@ -1,11 +1,10 @@
 import os
 import random
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    Application, CommandHandler, MessageHandler, CallbackQueryHandler,
-    ContextTypes, filters, JobQueue
-)
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from dotenv import load_dotenv
 
+load_dotenv()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 if not TOKEN:
     raise ValueError("TELEGRAM_TOKEN не задан!")
@@ -21,49 +20,44 @@ SUPPORT_MESSAGES = [
     "Маленькие победы тоже важны"
 ]
 
-active_chats = set()
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
-    active_chats.add(chat_id)
-    keyboard = [[InlineKeyboardButton("Получить поддержку прямо сейчас", callback_data="SUPPORT_NOW")]]
+    keyboard = [
+        [InlineKeyboardButton("Получить поддержку прямо сейчас", callback_data="support")]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        "Привет! Я буду присылать поддержку каждый час.\nНажми кнопку, чтобы получить поддержку прямо сейчас.",
-        reply_markup=reply_markup
-    )
+    await update.message.reply_text("Привет! Я твой бот поддержки 💛", reply_markup=reply_markup)
 
-async def support_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    message = random.choice(SUPPORT_MESSAGES)
-    await query.message.reply_text(message)
-
-async def keyword_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.lower()
-    keywords = ["помощь", "поддержка", "не могу", "плохо", "тяжело", "один", "устала"]
-    if any(word in text for word in keywords):
-        message = random.choice(SUPPORT_MESSAGES)
-        await update.message.reply_text(message)
+async def send_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = random.choice(SUPPORT_MESSAGES)
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(msg)
+    else:
+        await update.message.reply_text(msg)
 
 async def hourly_support(context: ContextTypes.DEFAULT_TYPE):
-    for chat_id in active_chats:
+    for chat_id in context.bot_data.get("chats", []):
         await context.bot.send_message(chat_id=chat_id, text=random.choice(SUPPORT_MESSAGES))
+
+async def register_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    chats = context.bot_data.setdefault("chats", set())
+    chats.add(chat_id)
 
 def main():
     app = Application.builder().token(TOKEN).build()
 
-    # Хендлеры
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(support_now, pattern="SUPPORT_NOW"))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, keyword_handler))
+    app.add_handler(CallbackQueryHandler(send_support, pattern="support"))
+    app.add_handler(CommandHandler("support", send_support))
+    app.add_handler(CommandHandler("register", register_chat))
 
-    # Фоновые задачи: каждый час
+    # Запуск часовой рассылки
     app.job_queue.run_repeating(hourly_support, interval=3600, first=3600)
 
-    # Запуск бота
     app.run_polling()
 
 if __name__ == "__main__":
     main()
+
 
