@@ -2,12 +2,7 @@ import os
 import random
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    Application, 
-    CommandHandler, 
-    CallbackQueryHandler, 
-    ContextTypes
-)
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 # Загружаем переменные окружения
 load_dotenv()
@@ -42,7 +37,6 @@ async def hourly_support(context: ContextTypes.DEFAULT_TYPE):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
 
-    # Сохраняем чат в список
     chat_ids = context.bot_data.get("chat_ids", set())
     chat_ids.add(chat_id)
     context.bot_data["chat_ids"] = chat_ids
@@ -61,18 +55,14 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     if query.data == "support_now":
-        chat_id = query.message.chat_id
-        await send_support(chat_id, context)
+        await send_support(query.message.chat_id, context)
 
-# Основная функция
 def main():
     app = Application.builder().token(TOKEN).build()
 
-    # Обработчики
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button, pattern="support_now"))
 
-    # Ежечасная поддержка (раз в 3600 секунд)
     app.job_queue.run_repeating(hourly_support, interval=3600, first=10)
 
     print("Бот запущен 🚀")
