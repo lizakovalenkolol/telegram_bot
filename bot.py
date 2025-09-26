@@ -1,15 +1,19 @@
+# bot.py
+import asyncio
 import os
 import random
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from dotenv import load_dotenv
 
+# Загружаем переменные из .env
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
+
 if not TOKEN:
     raise ValueError("TELEGRAM_TOKEN не задан!")
 
-SUPPORT_MESSAGES = [
+support_messages = [
     "Ты делаешь достаточно",
     "Всё будет хорошо",
     "Скоро всё получится",
@@ -22,42 +26,40 @@ SUPPORT_MESSAGES = [
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [InlineKeyboardButton("Получить поддержку прямо сейчас", callback_data="support")]
+        [InlineKeyboardButton("Получить поддержку прямо сейчас", callback_data="support_now")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Привет! Я твой бот поддержки 💛", reply_markup=reply_markup)
+    await update.message.reply_text("Привет! Нажми кнопку ниже, чтобы получить поддержку:", reply_markup=reply_markup)
 
-async def send_support(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = random.choice(SUPPORT_MESSAGES)
-    if update.callback_query:
-        await update.callback_query.answer()
-        await update.callback_query.edit_message_text(msg)
-    else:
-        await update.message.reply_text(msg)
+async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    message = random.choice(support_messages)
+    await query.message.reply_text(message)
 
 async def hourly_support(context: ContextTypes.DEFAULT_TYPE):
-    for chat_id in context.bot_data.get("chats", []):
-        await context.bot.send_message(chat_id=chat_id, text=random.choice(SUPPORT_MESSAGES))
+    # Отправляем сообщение всем, кто стартовал бота
+    for chat_id in context.bot_data.get("chat_ids", []):
+        await context.bot.send_message(chat_id=chat_id, text=random.choice(support_messages))
 
-async def register_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def track_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    chats = context.bot_data.setdefault("chats", set())
-    chats.add(chat_id)
+    if "chat_ids" not in context.bot_data:
+        context.bot_data["chat_ids"] = set()
+    context.bot_data["chat_ids"].add(chat_id)
 
 def main():
     app = Application.builder().token(TOKEN).build()
 
+    # Хэндлеры
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(send_support, pattern="support"))
-    app.add_handler(CommandHandler("support", send_support))
-    app.add_handler(CommandHandler("register", register_chat))
+    app.add_handler(CallbackQueryHandler(support_callback, pattern="support_now"))
+    app.add_handler(CommandHandler("track", track_users))  # можно вызвать командой /track чтобы добавлять в рассылку
 
-    # Запуск часовой рассылки
+    # JobQueue для уведомлений каждый час
     app.job_queue.run_repeating(hourly_support, interval=3600, first=3600)
 
     app.run_polling()
 
 if __name__ == "__main__":
     main()
-
-
