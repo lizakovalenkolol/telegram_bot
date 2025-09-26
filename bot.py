@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
+# Загружаем переменные окружения
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 if not TOKEN:
@@ -20,15 +21,18 @@ SUPPORT_MESSAGES = [
     "Маленькие победы тоже важны"
 ]
 
+# Отправка поддержки конкретному пользователю
 async def send_support(chat_id, context: ContextTypes.DEFAULT_TYPE):
     message = random.choice(SUPPORT_MESSAGES)
     await context.bot.send_message(chat_id, message)
 
+# Ежечасная рассылка всем пользователям
 async def hourly_support(context: ContextTypes.DEFAULT_TYPE):
     chat_ids = context.bot_data.get("chat_ids", set())
     for chat_id in chat_ids:
         await send_support(chat_id, context)
 
+# Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     chat_ids = context.bot_data.get("chat_ids", set())
@@ -42,12 +46,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
+# Кнопка поддержки
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.callback_query.data == "support_now":
         await update.callback_query.answer()
         chat_id = update.effective_chat.id
         await send_support(chat_id, context)
 
+# Основная функция
 def main():
     app = Application.builder().token(TOKEN).build()
 
@@ -61,5 +67,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
