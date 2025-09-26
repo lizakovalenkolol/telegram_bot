@@ -6,6 +6,11 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 # Получаем токен из Railway переменных окружения
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
+if not TOKEN:
+    raise ValueError("TELEGRAM_TOKEN не задан!")
+
+app = Application.builder().token(TOKEN).build()
+
 # Список поддерживающих сообщений
 SUPPORT_MESSAGES = [
     "ты делаешь достаточно 💛",
