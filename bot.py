@@ -1,12 +1,9 @@
-# bot.py
-import asyncio
 import os
 import random
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from dotenv import load_dotenv
 
-# Загружаем переменные из .env
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 
@@ -34,12 +31,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def support_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    message = random.choice(support_messages)
-    await query.message.reply_text(message)
+    await query.message.reply_text(random.choice(support_messages))
 
 async def hourly_support(context: ContextTypes.DEFAULT_TYPE):
-    # Отправляем сообщение всем, кто стартовал бота
-    for chat_id in context.bot_data.get("chat_ids", []):
+    chat_ids = context.bot_data.get("chat_ids", set())
+    for chat_id in chat_ids:
         await context.bot.send_message(chat_id=chat_id, text=random.choice(support_messages))
 
 async def track_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -47,16 +43,17 @@ async def track_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "chat_ids" not in context.bot_data:
         context.bot_data["chat_ids"] = set()
     context.bot_data["chat_ids"].add(chat_id)
+    await update.message.reply_text("Ты добавлен в рассылку поддержки!")
 
 def main():
     app = Application.builder().token(TOKEN).build()
 
-    # Хэндлеры
+    # Команды
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("track", track_users))
     app.add_handler(CallbackQueryHandler(support_callback, pattern="support_now"))
-    app.add_handler(CommandHandler("track", track_users))  # можно вызвать командой /track чтобы добавлять в рассылку
 
-    # JobQueue для уведомлений каждый час
+    # JobQueue
     app.job_queue.run_repeating(hourly_support, interval=3600, first=3600)
 
     app.run_polling()
