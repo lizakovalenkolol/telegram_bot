@@ -1,19 +1,12 @@
 import os
-import asyncio
 import random
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext, CallbackQueryHandler
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ContextTypes
 
-# ==========================
-# Переменная окружения
-# ==========================
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 if not TOKEN:
     raise ValueError("TELEGRAM_TOKEN не задан!")
 
-# ==========================
-# Сообщения поддержки
-# ==========================
 SUPPORT_MESSAGES = [
     "Ты делаешь достаточно",
     "Всё будет хорошо",
@@ -25,22 +18,12 @@ SUPPORT_MESSAGES = [
     "Маленькие победы тоже важны"
 ]
 
-# ==========================
-# Функция отправки поддержки
-# ==========================
-async def send_support(context: CallbackContext):
-    """Отправляет случайное поддерживающее сообщение всем чатам"""
-    for chat_id in context.chat_data.keys():
-        message = random.choice(SUPPORT_MESSAGES)
-        await context.bot.send_message(chat_id=chat_id, text=message)
+# Хранилище чат_id для авто-уведомлений
+active_chats = set()
 
-# ==========================
-# Команды бота
-# ==========================
-async def start(update: Update, context: CallbackContext):
-    """Команда /start"""
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    context.chat_data[chat_id] = True  # сохраняем чат для авто-уведомлений
+    active_chats.add(chat_id)
     keyboard = [[InlineKeyboardButton("Получить поддержку прямо сейчас", callback_data="SUPPORT_NOW")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(
@@ -48,32 +31,26 @@ async def start(update: Update, context: CallbackContext):
         reply_markup=reply_markup
     )
 
-async def support_now(update: Update, context: CallbackContext):
-    """Обработчик кнопки поддержки"""
+async def support_now(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     message = random.choice(SUPPORT_MESSAGES)
     await query.message.reply_text(message)
 
-async def keyword_handler(update: Update, context: CallbackContext):
-    """Отправка поддержки при ключевых словах"""
+async def keyword_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.lower()
     keywords = ["помощь", "поддержка", "не могу", "плохо", "тяжело", "один", "устала"]
     if any(word in text for word in keywords):
         message = random.choice(SUPPORT_MESSAGES)
         await update.message.reply_text(message)
 
-# ==========================
-# Планировщик уведомлений каждый час
-# ==========================
-async def hourly_support(context: CallbackContext):
-    for chat_id in context.chat_data.keys():
-        message = random.choice(SUPPORT_MESSAGES)
-        await context.bot.send_message(chat_id=chat_id, text=message)
+async def hourly_notifications(application: Application):
+    """Цикл уведомлений каждый час"""
+    while True:
+        for chat_id in active_chats:
+            await application.bot.send_message(chat_id=chat_id, text=random.choice(SUPPORT_MESSAGES))
+        await asyncio.sleep(3600)  # 1 час
 
-# ==========================
-# Основная функция
-# ==========================
 async def main():
     app = Application.builder().token(TOKEN).build()
 
@@ -82,15 +59,11 @@ async def main():
     app.add_handler(CallbackQueryHandler(support_now, pattern="SUPPORT_NOW"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, keyword_handler))
 
-    # Добавляем задачу каждый час (3600 секунд)
-    job_queue = app.job_queue
-    job_queue.run_repeating(hourly_support, interval=3600, first=3600)
-
-    # Запуск бота
+    # Запуск бота + задач
+    # Запускаем задачу уведомлений после запуска бота
+    app.create_task(hourly_notifications(app))
     await app.run_polling()
 
-# ==========================
-# Старт
-# ==========================
 if __name__ == "__main__":
+    import asyncio
     asyncio.run(main())
